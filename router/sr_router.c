@@ -53,6 +53,7 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req) {
     memcpy(ethernet_header->ether_dhost, broadcast_ethernet_address, ETHER_ADDR_LEN);
     
     /*Source */
+    /*add code to deal with arp reply*/
     
     
     /*IF arp request or arp reply*/
