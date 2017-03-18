@@ -55,9 +55,18 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req) {
     /*Source */
     /*add code to deal with arp reply*/
     
+    /*Get an instance*/
+    
     
     /*IF arp request or arp reply*/
     if (htons(arp_header->ar_op) == arp_op_request) {
+        printf("THIS IS AN ARP REQUEST!**\n");
+        
+        /*Check for correct interface*/
+        if (default_gateway != 0) {
+            /*Packet is meant for the router interface*/
+            
+        }
         
     }
     else if (htons(arp_header->ar_op) == arp_op_reply) {
