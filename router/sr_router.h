@@ -77,6 +77,10 @@ void sr_print_if_list(struct sr_instance* );
 
 /* -- sr_arpcache.c and sr_router.c -- */
 void handle_arpreq(struct sr_instance* , struct sr_arpreq* );
+void sr_send_arpreq(struct sr_instance*, uint32_t);
+
+/*Parameter list - router instance, packet, length*/
+void sr_arp_receive(struct sr_instance*, uint8_t *, unsigned int, char*);
 
 /*Sanity checks*/
 int layer2_sanity_check(uint8_t *frame, unsigned int length);

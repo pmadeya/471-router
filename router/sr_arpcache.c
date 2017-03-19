@@ -16,7 +16,18 @@
   See pseudo-code in sr_arpcache.h 
 */
 void sr_arpcache_sweepreqs(struct sr_instance *sr) { 
-  /* TODO: Fill this in */
+    /*Get an instance of an ARP request in the linked list*/
+    struct sr_arpreq* current_arp_request = sr->cache.requests;
+    struct sr_arpreq* next_arp_request; 
+    
+    while(current_arp_request != NULL) {
+        /*Save the next arp request for safety (function can cause deletion)*/
+        next_arp_request = current_arp_request->next;
+        
+        handle_arpreq(sr, current_arp_request);
+        current_arp_request->next++;
+    }
+    
  
 }
 
