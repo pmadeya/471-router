@@ -68,6 +68,12 @@ int sr_read_from_server(struct sr_instance* );
 /* -- sr_router.c -- */
 void sr_init(struct sr_instance* );
 void sr_handlepacket(struct sr_instance* , uint8_t * , unsigned int , char* );
+void sr_icmp_receive(struct sr_instance*, uint8_t *, unsigned int, char* );
+void sr_send_icmp_reply_from_router(struct sr_instance*, uint8_t *, unsigned int, char*, struct sr_if*);
+void sr_forward_icmp_packet(struct sr_instance* , uint8_t *, unsigned int, char* );
+struct sr_if* sr_get_interface_prefix_matching(struct sr_instance*, uint32_t); 
+uint8_t* broadcast_address();
+
 
 /* -- sr_if.c -- */
 void sr_add_interface(struct sr_instance* , const char* );

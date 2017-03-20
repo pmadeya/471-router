@@ -28,16 +28,179 @@
 
 /* TODO: Add constant definitions here... */
 
+void sr_icmp_receive(struct sr_instance* sr, uint8_t* packet, unsigned int length, char* interface) {
+    printf("***I AM RECEIVING AN ICMP PACKET\n***");
+    /*layer2_sanity_check(packet, length);*/
+    
+    /*Get an instance of the current interface */
+    /*struct sr_if* default_gateway = sr_get_interface(sr, interface);*/
+    printf("\nGW:");
+    /*print_addr_ip_int(ntohl(default_gateway->ip));*/
+    
+
+    
+    /*Make an IP header*/
+    sr_ip_hdr_t* ip_header = (sr_ip_hdr_t*) (packet + sizeof(sr_ethernet_hdr_t));
+    print_hdrs(packet, length);
+    
+   
+    
+    /*Check if the incoming ICMP packet is for the router itself (interface)*/
+    /*Get the list of the available gateways*/
+    struct sr_if* available_gateways = sr->if_list;
+    
+    /*Cycle through gateway list on the router*/
+    while (available_gateways != NULL) {
+        if (available_gateways->ip == ip_header->ip_dst) {
+            /*The destination is the router interface itself */
+            break;
+        }
+        
+        available_gateways = available_gateways->next;
+    }
+    
+    
+    if (available_gateways != NULL) {
+        sr_send_icmp_reply_from_router(sr, packet, length, interface, available_gateways);
+    }
+    else {
+        /*Calls forwarding function*/\
+        free(available_gateways);
+        printf("skldjflksdjflksdjfkljsdlkfjlksdjf");
+        sr_forward_icmp_packet(sr, packet, length, interface);
+    }
+
+}
+
+void sr_send_icmp_reply_from_router(struct sr_instance* sr, uint8_t* packet, unsigned int length, char* incoming_interface, struct sr_if* gateway) {
+    /*Create ICMP header*/
+    sr_ethernet_hdr_t* ethernet_header = (sr_ethernet_hdr_t*) packet;
+    sr_ip_hdr_t* ip_header = (sr_ip_hdr_t*) (packet + sizeof(sr_ethernet_hdr_t));
+    sr_icmp_hdr_t* icmp_header = (sr_icmp_hdr_t*) (packet + sizeof(sr_ip_hdr_t) + sizeof(sr_ethernet_hdr_t));
+    
+    /*Get the name of the current interface*/
+            
+            
+    /*Check if received an ICMP request*/
+    if (icmp_header->icmp_type == 8 && icmp_header->icmp_code == 0) {
+        
+        struct sr_if* current_interface = sr_get_interface(sr, incoming_interface);
+        
+        /*Setting the ethernet header fields*/
+        memcpy(ethernet_header->ether_dhost, ethernet_header->ether_shost, ETHER_ADDR_LEN);
+        memcpy(ethernet_header->ether_shost, current_interface->addr, ETHER_ADDR_LEN);
+        
+        /*Setting the ICMP header fields*/
+        icmp_header->icmp_sum = 0; /*Reply*/
+        icmp_header->icmp_type = 0;
+        icmp_header->icmp_code = 0;
+        
+        /*Recompute the checksum*/
+        icmp_header->icmp_sum = cksum(icmp_header, sizeof(sr_icmp_t3_hdr_t));
+        
+        /*Setting the IP header fields*/
+        ip_header->ip_dst = ip_header->ip_src;
+        ip_header->ip_src = current_interface->ip;
+        ip_header->ip_sum = 0;
+        ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
+        
+        /*Send the reply over the wire*/
+        sr_send_packet(sr, packet, length, current_interface->name);
+        
+    }
+    
+    printf("Change ICMP packet to reply and send it back to the source host");
+    
+    
+    
+    
+}
+
+/*If the destination is not destined for one of the router interfaces,
+ this function will be called; It will forward the packet based on longest
+ prefix matching to the end host*/
+void sr_forward_icmp_packet(struct sr_instance* sr, uint8_t* packet, unsigned int length, char* interface) {
+    printf("Destination host is not one of the router interfaces\n");
+    printf("Must forward packet!**\n");
+    
+    sr_ethernet_hdr_t* ethernet_header = (sr_ethernet_hdr_t*) packet;
+    sr_ip_hdr_t* ip_header = (sr_ip_hdr_t*) (packet + sizeof(sr_ethernet_hdr_t));
+    
+    
+    
+    printf("RIGHT HERE!!!!");
+    
+    /*Check the ARP table in the router to look for destination IP-MAC mapping*/
+    struct sr_arpentry* entry = sr_arpcache_lookup(&(sr->cache), ip_header->ip_dst);
+    
+    printf("PERFECT!!");
+    
+    /*Get the new routing table*/
+    struct sr_if* sending_interface = sr_get_interface_prefix_matching(sr, ip_header->ip_dst);
+
+    /*Gives us the interface we need to forward on*/
+    /*struct sr_if* sending_interface = sr_get_interface(sr, (const char*) (new_routing_table->interface));*/
+    printf("Sending interface:*******"); 
+    print_addr_ip_int(ntohl(sending_interface->ip));
+    
+        
+    /*If mapping exists in the table*/
+    if (entry != NULL) {
+        /*Find the correct gateway to get the interface that can actually forward
+        on the correct interface (subnet)
+        */
+        /*Set the new ethernet values*/
+        printf("INSIDE THE ENTRY IF STATMENT");
+        memcpy(ethernet_header->ether_dhost, entry->mac, ETHER_ADDR_LEN);
+        memcpy(ethernet_header->ether_shost, sending_interface->addr, ETHER_ADDR_LEN);
+        
+        /*Send the packet on the wire*/
+        print_hdrs(packet, length);
+        sr_send_packet(sr, packet, length, sending_interface->name);
+           
+        free(entry);
+        return;
+    }
+    else {
+        printf("HANDLE ARP QUEU!!!!");
+        struct sr_arpreq* new_arp_request = sr_arpcache_queuereq(&(sr->cache), ip_header->ip_dst, packet, length, sending_interface->name);
+        handle_arpreq(sr, new_arp_request);
+    }
+}
+
+struct sr_if* sr_get_interface_prefix_matching(struct sr_instance* sr, uint32_t target_ip) {
+    printf("We are the beginning of the prefix match function");
+    
+    struct sr_rt* new_routing_table = sr->routing_table;
+    
+    while (new_routing_table) {
+        
+        uint32_t maskIP = new_routing_table->mask.s_addr & target_ip;
+        if (new_routing_table->dest.s_addr == maskIP) {
+            
+            return sr_get_interface(sr, new_routing_table->interface);
+        }
+        
+        new_routing_table = new_routing_table->next;
+        
+    }
+    
+    return NULL;
+
+}
+
 
 /* TODO: Add helper functions here... */
 void sr_arp_receive(struct sr_instance* sr, uint8_t* packet, unsigned int length, char* interface) {
     
     printf("I AM RECEIVING AN ARP PACKET***");
+    printf("%s", interface);
     sr_ethernet_hdr_t* ethernet_header = (sr_ethernet_hdr_t*) packet;
     sr_arp_hdr_t* arp_header = (sr_arp_hdr_t*) (packet + sizeof(sr_ethernet_hdr_t));
     assert(packet);
     
     /*Get an instance to the incoming gateway for ARP request*/
+    /*Incoming */
     struct sr_if* default_gateway = sr_get_interface(sr, interface);
     printf("DEFAULT GATEWAY:\n");
     print_addr_ip_int(ntohl(default_gateway->ip));
@@ -53,30 +216,53 @@ void sr_arp_receive(struct sr_instance* sr, uint8_t* packet, unsigned int length
             /*If sr_get_interface function returns anything but 0, it is the correct interface*/
             if (default_gateway != 0) {
                 
-              
                 /*TODO: sr_arpcache_insert*/
+                /*Always insert the arp request that we are processing*/
+                sr_arpcache_insert(&(sr->cache), arp_header->ar_sha, arp_header->ar_sip);
                 
                 /*ARP reply will be sent back*/
                 arp_header->ar_op = htons(arp_op_reply);
                 
                 /*Setting the ethernet header*/
-                memcpy(ethernet_header->ether_shost, (uint8_t*) default_gateway->name, ETHER_ADDR_LEN);
-                memcpy(ethernet_header->ether_dhost, (uint8_t*) arp_header->ar_sha, ETHER_ADDR_LEN);
+                /*Set the source hardware address as the ethernet destination packet FIRST!*/
+                memcpy(ethernet_header->ether_dhost, arp_header->ar_sha, ETHER_ADDR_LEN);
+                memcpy(ethernet_header->ether_shost, default_gateway->addr, ETHER_ADDR_LEN);
+                
                 /*Set the ARP header*/
-                memcpy(arp_header->ar_sha, default_gateway->addr, ETHER_ADDR_LEN);
                 memcpy(arp_header->ar_tha, arp_header->ar_sha, ETHER_ADDR_LEN);
-                arp_header->ar_sip = arp_header->ar_tip;
+                memcpy(arp_header->ar_sha, default_gateway->addr, ETHER_ADDR_LEN);
+                
+                /*Set the IP addresses*/
                 arp_header->ar_tip = arp_header->ar_sip;
+                arp_header->ar_sip = default_gateway->ip;
+                
+                printf("PACKET DETAILS\n");
+                print_hdrs(packet, length);
                 
                 /*Send the ARP reply on the wire*/
                 sr_send_packet(sr, packet, length, default_gateway->name);
                   
             }
             
-            
+         break;   
         case (arp_op_reply):
+            printf("I FINALLY GET TO THE ARP REPLY CASE");
+            
+            struct sr_arpreq* arp_queue = sr_arpcache_insert(&(sr->cache), arp_header->ar_sha, arp_header->ar_sip);
+            struct sr_packet* packet_to_send = arp_queue->packets;
+            
+            while (packet_to_send != NULL) {
+                sr_forward_icmp_packet(sr, packet_to_send->buf, packet_to_send->len, interface);
+                packet_to_send = packet_to_send->next;
+                
+            }
+            
+            sr_arpreq_destroy(&(sr->cache), arp_queue);
             
             
+            
+            
+            break;
             
             
         default:
@@ -110,10 +296,16 @@ void sr_arp_receive(struct sr_instance* sr, uint8_t* packet, unsigned int length
     
 }
 
-
-
-
-
+uint8_t* broadcast_address() {
+    uint8_t* broadcast_ethernet_address  = malloc(sizeof(uint8_t) * ETHER_ADDR_LEN);
+   
+    /*Fill with all */
+    int i = 0; /*Must declare outside of initializer list, only in C99/C11*/ 
+    for (; i < ETHER_ADDR_LEN; i++) {
+        broadcast_ethernet_address[i] = 255;
+    }
+    return broadcast_ethernet_address;
+}
 
 
 void sr_send_arpreq(struct sr_instance* sr, uint32_t target_ip) {
@@ -125,13 +317,18 @@ void sr_send_arpreq(struct sr_instance* sr, uint32_t target_ip) {
     sr_arp_hdr_t* arp_header = (sr_arp_hdr_t*) (arp + sizeof(sr_ethernet_hdr_t));
     assert(arp);
     
+    
+    /*Length of arp packet*/
+    unsigned int length = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
+    
     /*Set destination address as broadcast address - FF:FF:FF:FF:FF:FF*/
-    /*memcpy(ethernet_header->ether_dhost, 0xffffffffffff, ETHER_ADDR_LEN);*/
+    memcpy(ethernet_header->ether_dhost, broadcast_address(), ETHER_ADDR_LEN);
+    printf("\nETHERNET BROADCAST ADDRESS: %d\n", (*broadcast_address(255)));
     
     /*Loop through all interfaces on the router to send broadcast*/
-    struct sr_if* current_interface = sr->if_list;
+    struct sr_if* current_interface = sr_get_interface_prefix_matching(sr, target_ip);
     
-    while (current_interface != NULL) {
+    if (current_interface != NULL) {
         /*Initialize an ARP packet*/
         sr_arp_hdr_t* arp_header = (sr_arp_hdr_t*) (arp + sizeof(sr_ethernet_hdr_t));
         assert(arp);
@@ -152,17 +349,18 @@ void sr_send_arpreq(struct sr_instance* sr, uint32_t target_ip) {
         /*Set the source MAC address as the current interface of the router*/
         memcpy(arp_header->ar_sha, current_interface->addr, ETHER_ADDR_LEN);
         /*Set the source IP address as the current interface of the router*/
-        arp_header->ar_sip = htonl(current_interface->ip);
+        arp_header->ar_sip = current_interface->ip;
         
         memset(arp_header->ar_tha, 0, ETHER_ADDR_LEN); /*Set to zero's*/
-        arp_header->ar_tip = htonl(target_ip);
+        arp_header->ar_tip = target_ip;
         
         /*Send the packet on the wire*/
-        sr_send_packet(sr, arp, sizeof(arp), current_interface->name);
+        sr_send_packet(sr, arp, length, current_interface->name);
+        print_hdrs(arp, length);
         
         /*Proceed to the next request*/
         /*sr_arpreq_destroy(sr->cache, )*/
-        current_interface->next++;
+       
     }
     
 }
@@ -171,6 +369,8 @@ void sr_send_arpreq(struct sr_instance* sr, uint32_t target_ip) {
 /* See pseudo-code in sr_arpcache.h */
 void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req) {
     /* TODO: Fill this in */
+    printf("QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ");
+     sr_send_arpreq(sr, req->ip);
     double time_difference = 0.0;
     
     /*Get an instance of the current time*/
@@ -182,7 +382,8 @@ void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req) {
         
         if (req->sent >= 5) {
             /*TODO: Send ICMP host unreachable to source address of all packets waiting*/
-            sr_arpreq_destroy(&(sr->cache), req);
+            /*sr_arpreq_destroy(&(sr->cache), req);*/
+            printf("hBD");
             
         }
         else {
@@ -263,9 +464,8 @@ void sr_handlepacket(struct sr_instance* sr,
     printf("*** -> Received packet of length %u\n\n", len);
     
     /*Print out the header information for all packets received*/
-    /*print_hdrs(packet, len);*/
-    printf("Size of ethernet header: %lu\n", sizeof(sr_ethernet_hdr_t));
-    printf("Size of ARP header: %lu\n", sizeof(sr_arp_hdr_t));
+    print_hdrs(packet, len);
+    
     
     /*Packet first received will always be an ethernet frame*/
     sr_ethernet_hdr_t *raw_ethernet_frame = (sr_ethernet_hdr_t*) packet;
@@ -276,22 +476,14 @@ void sr_handlepacket(struct sr_instance* sr,
     switch(ntohs(raw_ethernet_frame->ether_type)) {
         case (ethertype_arp):
             printf("***ARP PACKET***\n");
-            /*
-            struct sr_arpreq *arp_request = malloc(sizeof(struct sr_arpreq));
-            struct sr_packet *pkt = malloc(sizeof(struct sr_packet));
-            pkt->buf = packet;
-            pkt->iface = interface;
-            pkt->len = len;
             
-            arp_request->packets = pkt;
-            
-            handle_arpreq(sr, arp_request);
-            */
             sr_arp_receive(sr, packet, len, interface);
-            
             break;
         case (ethertype_ip):
-            printf("IP PACKETS**");
+            printf("IP PACKETS\n\n**");
+            sr_icmp_receive(sr, packet, len, interface);
+            
+            
             break;
         
         default:
