@@ -17,16 +17,18 @@
 */
 void sr_arpcache_sweepreqs(struct sr_instance *sr) { 
     /*Get an instance of an ARP request in the linked list*/
-  /*  struct sr_arpreq* current_arp_request = sr->cache.requests;*/
-   /* struct sr_arpreq* next_arp_request; */
+    struct sr_arpreq* current_arp_request = sr->cache.requests;
+    struct sr_arpreq* next_arp_request;
     
-    /*(while(current_arp_request != NULL) {*/
+    while(current_arp_request != NULL) {
         /*Save the next arp request for safety (function can cause deletion)*/
-     /*   next_arp_request = current_arp_request->next;*/
+        next_arp_request = current_arp_request->next;
         
-     /*   handle_arpreq(sr, current_arp_request);*/
-       /* current_arp_request->next++;*/
-   /* }*/
+        handle_arpreq(sr, current_arp_request);
+        current_arp_request = next_arp_request;
+        
+        printf("NEXT TIME *******!!!!!!!\n");
+    }
     
  
 }

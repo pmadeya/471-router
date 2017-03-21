@@ -269,31 +269,6 @@ void sr_arp_receive(struct sr_instance* sr, uint8_t* packet, unsigned int length
             return;
     }
     
-            
-    
-    /*Source */
-    /*add code to deal with arp reply*/
-    
-    /*Get an instance*/
-    
-    
-    /*IF arp request or arp reply*/
-    if (htons(arp_header->ar_op) == arp_op_request) {
-        printf("THIS IS AN ARP REQUEST!**\n");
-        
-        /*Check for correct interface*/
-        if (default_gateway != 0) {
-            /*Packet is meant for the correct router interface*/
-            /*Check the ARP cache*/
-            
-        }
-        
-    }
-    else if (htons(arp_header->ar_op) == arp_op_reply) {
-        
-    }
-    
-    
 }
 
 uint8_t* broadcast_address() {
@@ -370,14 +345,14 @@ void sr_send_arpreq(struct sr_instance* sr, uint32_t target_ip) {
 void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req) {
     /* TODO: Fill this in */
     printf("QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ");
-     sr_send_arpreq(sr, req->ip);
+    /*sr_send_arpreq(sr, req->ip);*/
     double time_difference = 0.0;
     
     /*Get an instance of the current time*/
     time_t current_time = time(NULL);
     
     /*Get difference in time between current time and time ARP request sent*/
-    time_difference = (time(NULL), req->sent);
+    time_difference = difftime(time(0), req->sent);
     if (time_difference > 1.0) {
         
         if (req->sent >= 5) {
