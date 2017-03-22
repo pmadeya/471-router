@@ -55,10 +55,8 @@ void sr_icmp_receive(struct sr_instance* sr, uint8_t* packet, unsigned int lengt
             /*The destination is the router interface itself */
             break;
         }
-        
         available_gateways = available_gateways->next;
     }
-    
     
     if (available_gateways != NULL) {
         sr_send_icmp_reply_from_router(sr, packet, length, interface, available_gateways);
@@ -67,7 +65,17 @@ void sr_icmp_receive(struct sr_instance* sr, uint8_t* packet, unsigned int lengt
         /*Calls forwarding function*/\
         free(available_gateways);
         printf("skldjflksdjflksdjfkljsdlkfjlksdjf");
-        sr_forward_icmp_packet(sr, packet, length, interface);
+        
+        ip_header->ip_ttl--;
+        if (ip_header->ip_ttl <= 0) {
+            
+            ip_header->ip_sum = 0;
+            ip_header->ip_sum = cksum(ip_header, sizeof(sr_ip_hdr_t));
+        }
+        else {
+            sr_forward_icmp_packet(sr, packet, length, interface);
+        }
+        
     }
 
 }
@@ -137,6 +145,8 @@ void sr_forward_icmp_packet(struct sr_instance* sr, uint8_t* packet, unsigned in
     
     /*Get the new routing table*/
     struct sr_if* sending_interface = sr_get_interface_prefix_matching(sr, ip_header->ip_dst);
+    
+
 
     /*Gives us the interface we need to forward on*/
     /*struct sr_if* sending_interface = sr_get_interface(sr, (const char*) (new_routing_table->interface));*/
@@ -149,6 +159,10 @@ void sr_forward_icmp_packet(struct sr_instance* sr, uint8_t* packet, unsigned in
         /*Find the correct gateway to get the interface that can actually forward
         on the correct interface (subnet)
         */
+        
+        
+        
+        
         /*Set the new ethernet values*/
         printf("INSIDE THE ENTRY IF STATMENT");
         memcpy(ethernet_header->ether_dhost, entry->mac, ETHER_ADDR_LEN);
@@ -275,10 +289,24 @@ uint8_t* broadcast_address() {
     uint8_t* broadcast_ethernet_address  = malloc(sizeof(uint8_t) * ETHER_ADDR_LEN);
    
     /*Fill with all */
-    int i = 0; /*Must declare outside of initializer list, only in C99/C11*/ 
+    /*Must declare outside of initializer list, only in C99/C11*/
+    /*
+    int i = 0;  
     for (; i < ETHER_ADDR_LEN; i++) {
         broadcast_ethernet_address[i] = 255;
-    }
+    }*/
+    
+    /*255 is FF represented in decimal*/
+    /*Filling each entry in the array with FF*/
+    
+    broadcast_ethernet_address[0] = 255;
+    broadcast_ethernet_address[1] = 255;
+    broadcast_ethernet_address[2] = 255;
+    broadcast_ethernet_address[3] = 255;
+    broadcast_ethernet_address[4] = 255;
+    broadcast_ethernet_address[5] = 255;
+    
+    
     return broadcast_ethernet_address;
 }
 
